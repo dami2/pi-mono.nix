@@ -1,14 +1,13 @@
-#!/usr/bin/env bash
+# shellcheck shell=bash
+#!/usr/bin/env -S nix shell nixpkgs#bash nixpkgs#git nixpkgs#jq nixpkgs#gnutar nixpkgs#nix -c bash
 set -euo pipefail
 
 repo_url=https://github.com/badlogic/pi-mono.git
 version_file=VERSION.json
 archive_base_url=https://github.com/badlogic/pi-mono/archive/refs/tags
-fake_npm_deps_hash=sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
 die() { echo "$*" >&2; exit 1; }
 out() { [[ -n ${GITHUB_OUTPUT:-} ]] && echo "$1=$2" >> "$GITHUB_OUTPUT"; }
-need() { command -v "$1" >/dev/null || die "Missing required command: $1"; }
 
 write_version_json() {
   local rev=$1 hash=$2 npmDepsHash=$3 tmp
@@ -23,10 +22,6 @@ write_version_json() {
     "$version_file" > "$tmp"
   mv "$tmp" "$version_file"
 }
-
-need git
-need jq
-need nix
 
 current_rev=$(jq -r '.rev' "$version_file")
 latest_rev=$(
@@ -47,26 +42,24 @@ if [[ "$latest_rev" == "$current_rev" ]]; then
 fi
 
 src_hash=$(nix store prefetch-file --json --unpack "${archive_base_url}/${latest_rev}.tar.gz" | jq -r .hash)
+archive_path=$(nix store prefetch-file --json "${archive_base_url}/${latest_rev}.tar.gz" | jq -r .storePath)
 
 backup=$(mktemp)
-log=$(mktemp)
+tmpdir=$(mktemp -d)
 cp "$version_file" "$backup"
-trap 'cp "$backup" "$version_file" 2>/dev/null || true; rm -f "$backup" "$log"' EXIT
+trap 'cp "$backup" "$version_file" 2>/dev/null || true; rm -f "$backup"; rm -rf "$tmpdir"' EXIT
 
-write_version_json "$latest_rev" "$src_hash" "$fake_npm_deps_hash"
-
-if nix build .#coding-agent --no-link >/dev/null 2>"$log"; then
-  die "Expected nix build to fail with a fake npmDepsHash, but it succeeded"
-fi
-
-npm_deps_hash=$(sed -nE 's/.*got:[[:space:]]*(sha256-[A-Za-z0-9+/=]+).*/\1/p' "$log" | tail -n1)
-[[ -n "$npm_deps_hash" ]] || die "Failed to extract npmDepsHash from nix build output"
+tar -xzf "$archive_path" --strip-components=1 -C "$tmpdir"
+[[ -f "$tmpdir/package-lock.json" ]] || die "Upstream archive does not contain package-lock.json"
+npm_deps_hash=$(nix run --inputs-from . nixpkgs#prefetch-npm-deps -- "$tmpdir/package-lock.json" | tail -n1)
+[[ -n "$npm_deps_hash" ]] || die "Failed to determine npmDepsHash"
 
 write_version_json "$latest_rev" "$src_hash" "$npm_deps_hash"
 nix build .#coding-agent --no-link >/dev/null
 
 trap - EXIT
-rm -f "$backup" "$log"
+rm -f "$backup"
+rm -rf "$tmpdir"
 
 echo "Updated VERSION.json to $latest_rev"
 out changed true
