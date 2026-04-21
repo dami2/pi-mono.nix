@@ -46,44 +46,130 @@ in
         - Make no mistakes.
       '';
     };
+
+    skills = lib.mkOption {
+      type = lib.types.listOf lib.types.path;
+      default = [ ];
+      description = ''
+        Skill directories to symlink into `~/.pi/agent/skills/` for the configured
+        users.
+
+        Each path is symlinked using its basename as the symlink name.
+        The path should be a directory containing a `SKILL.md` file.
+      '';
+      example = lib.literalExpression ''
+        [
+          ./skills/my-skill
+          ./skills/nixpkgs
+        ]
+      '';
+    };
+
+    extensions = lib.mkOption {
+      type = lib.types.listOf lib.types.path;
+      default = [ ];
+      description = ''
+        Extension files or directories to symlink into `~/.pi/agent/extensions/`
+        for the configured users.
+
+        Each path is symlinked using its basename as the symlink name.
+      '';
+      example = lib.literalExpression ''
+        [
+          ./extensions/my-extension.ts
+        ]
+      '';
+    };
   };
 
-  config = lib.mkIf cfg.enable (lib.mkMerge [
-    {
-      assertions = [
-        {
-          assertion = invalidUsers == [ ];
-          message = "programs.pi.coding-agent.users contains unknown or non-normal users: ${lib.concatStringsSep ", " invalidUsers}";
-        }
-      ];
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        assertions = [
+          {
+            assertion = invalidUsers == [ ];
+            message = "programs.pi.coding-agent.users contains unknown or non-normal users: ${lib.concatStringsSep ", " invalidUsers}";
+          }
+        ];
 
-      environment.systemPackages = [ cfg.package ];
-    }
+        environment.systemPackages = [ cfg.package ];
+      }
 
-    (lib.mkIf (cfg.rules != null) {
-      systemd.tmpfiles.settings."10-pi-coding-agent" =
-        let
-          rulesFile = pkgs.writeText "pi-AGENTS.md" cfg.rules;
-        in
-        lib.mkMerge (
-          lib.mapAttrsToList (name: user: {
-            "${user.home}/.pi".d = {
-              user = name;
-              inherit (user) group;
-              mode = "0700";
-            };
+      (lib.mkIf (cfg.rules != null) {
+        systemd.tmpfiles.settings."10-pi-coding-agent" =
+          let
+            rulesFile = pkgs.writeText "pi-AGENTS.md" cfg.rules;
+          in
+          lib.mkMerge (
+            lib.mapAttrsToList (name: user: {
+              "${user.home}/.pi".d = {
+                user = name;
+                inherit (user) group;
+                mode = "0700";
+              };
 
-            "${user.home}/.pi/agent".d = {
-              user = name;
-              inherit (user) group;
-              mode = "0700";
-            };
+              "${user.home}/.pi/agent".d = {
+                user = name;
+                inherit (user) group;
+                mode = "0700";
+              };
 
-            "${user.home}/.pi/agent/AGENTS.md".L = {
-              argument = "${rulesFile}";
-            };
-          }) selectedUsers
+              "${user.home}/.pi/agent/AGENTS.md".L = {
+                argument = "${rulesFile}";
+              };
+            }) selectedUsers
+          );
+      })
+
+      (lib.mkIf (cfg.skills != [ ]) {
+        systemd.tmpfiles.settings."10-pi-coding-agent-skills" = lib.mkMerge (
+          lib.mapAttrsToList (
+            _name: user:
+            lib.mkMerge [
+              {
+                "${user.home}/.pi/agent/skills".d = {
+                  user = user.name;
+                  inherit (user) group;
+                  mode = "0755";
+                };
+              }
+              (lib.listToAttrs (
+                lib.imap0 (_i: path: {
+                  name = "${user.home}/.pi/agent/skills/${lib.strings.unsafeDiscardStringContext (baseNameOf (toString path))}";
+                  value.L = {
+                    argument = "${path}";
+                  };
+                }) cfg.skills
+              ))
+            ]
+          ) selectedUsers
         );
-    })
-  ]);
+      })
+
+      (lib.mkIf (cfg.extensions != [ ]) {
+        systemd.tmpfiles.settings."10-pi-coding-agent-extensions" = lib.mkMerge (
+          lib.mapAttrsToList (
+            _name: user:
+            lib.mkMerge [
+              {
+                "${user.home}/.pi/agent/extensions".d = {
+                  user = user.name;
+                  inherit (user) group;
+                  mode = "0755";
+                };
+              }
+              (lib.listToAttrs (
+                lib.imap0 (_i: path: {
+                  name = "${user.home}/.pi/agent/extensions/${lib.strings.unsafeDiscardStringContext (baseNameOf (toString path))}";
+                  value.L = {
+                    argument = "${path}";
+                  };
+                }) cfg.extensions
+              ))
+            ]
+          ) selectedUsers
+        );
+      })
+    ]
+  );
 }
