@@ -96,6 +96,20 @@ in
         ]
       '';
     };
+
+    models = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Path to a custom `models.json` file to symlink to `~/.pi/agent/models.json`.
+
+        This file defines custom providers and models for pi to use.
+        When set to `null`, no symlink is created and pi uses its default models.
+      '';
+      example = lib.literalExpression ''
+        ./models.json
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable (
@@ -208,6 +222,18 @@ in
                 }) cfg.themes
               ))
             ]
+          ) selectedUsers
+        );
+      })
+
+      (lib.mkIf (cfg.models != null) {
+        systemd.tmpfiles.settings."10-pi-coding-agent-models" = lib.mkMerge (
+          lib.mapAttrsToList (
+            _name: user: {
+              "${user.home}/.pi/agent/models.json".L = {
+                argument = "${cfg.models}";
+              };
+            }
           ) selectedUsers
         );
       })
