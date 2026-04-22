@@ -42,14 +42,15 @@ let
     );
 
   wrapperArgs = lib.concatMapStringsSep " " lib.escapeShellArg resourceArgs;
+  extraFlagsArgs = lib.concatMapStringsSep " " lib.escapeShellArg cfg.extraFlags;
 
   wrappedPackage =
-    if resourceArgs == [ ] && cfg.environment == null then
+    if resourceArgs == [ ] && cfg.environment == null && cfg.extraFlags == [ ] then
       cfg.package
     else
       pkgs.writeShellScriptBin "pi" ''
         ${wrapperPrelude}
-        exec ${lib.escapeShellArg (lib.getExe cfg.package)} ${wrapperArgs} "$@"
+        exec ${lib.escapeShellArg (lib.getExe cfg.package)} ${wrapperArgs} ${extraFlagsArgs} "$@"
       '';
 in
 {
@@ -151,6 +152,17 @@ in
       '';
       example = lib.literalExpression ''
         ./models.json
+      '';
+    };
+
+    extraFlags = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = ''
+        Extra raw CLI arguments to always append when launching pi.
+      '';
+      example = lib.literalExpression ''
+        [ "--provider" "openai" "--model" "gpt-5" ]
       '';
     };
 

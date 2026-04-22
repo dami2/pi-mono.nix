@@ -70,6 +70,9 @@ nix build .#coding-agent
     # ~/.pi/agent/models.json
     # models = ./models.json;
 
+    # extra raw CLI flags
+    # extraFlags = [ "--provider" "openai" "--model" "gpt-5" ];
+
     # environment variables or env file
     # environment = {
     #   OPENAI_API_KEY = config.age.secrets.openai.path;
