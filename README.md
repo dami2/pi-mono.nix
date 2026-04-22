@@ -49,7 +49,7 @@ nix build .#coding-agent
     # target users
     # users = [ "lukas" ]; # defaults to all normal users
 
-    # ~/.pi/agent/AGENTS.md
+    # appended to the system prompt
     # rules = ''
     #   # AGENTS.md
     #   Be concise.

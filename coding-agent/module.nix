@@ -15,8 +15,12 @@ let
   environmentAttrset = if lib.isAttrs cfg.environment then cfg.environment else { };
   invalidEnvironmentNames = builtins.filter (name: builtins.match "[A-Za-z_][A-Za-z0-9_]*" name == null) (builtins.attrNames environmentAttrset);
 
+  rulesFile = lib.optionalString (cfg.rules != null) (toString (pkgs.writeText "pi-AGENTS.md" cfg.rules));
+
   resourceArgs =
-    (lib.concatMap (path: [ "--skill" (toString path) ]) cfg.skills)
+    (lib.optional (cfg.rules != null) "--append-system-prompt")
+    ++ (lib.optional (cfg.rules != null) rulesFile)
+    ++ (lib.concatMap (path: [ "--skill" (toString path) ]) cfg.skills)
     ++ (lib.concatMap (path: [ "--extension" (toString path) ]) cfg.extensions)
     ++ (lib.concatMap (path: [ "--theme" (toString path) ]) cfg.themes);
 
@@ -72,7 +76,7 @@ in
       type = lib.types.nullOr lib.types.lines;
       default = null;
       description = ''
-        Content to symlink to `~/.pi/agent/AGENTS.md` for the configured users.
+        Extra instructions to append to pi's system prompt via `--append-system-prompt`.
       '';
       example = ''
         # Rules
@@ -170,33 +174,6 @@ in
 
         environment.systemPackages = [ wrappedPackage ];
       }
-
-      (lib.mkIf (cfg.rules != null) {
-        systemd.tmpfiles.settings."10-pi-coding-agent" =
-          let
-            rulesFile = pkgs.writeText "pi-AGENTS.md" cfg.rules;
-          in
-          lib.mkMerge (
-            lib.mapAttrsToList (name: user: {
-              "${user.home}/.pi".d = {
-                user = name;
-                inherit (user) group;
-                mode = "0700";
-              };
-
-              "${user.home}/.pi/agent".d = {
-                user = name;
-                inherit (user) group;
-                mode = "0700";
-              };
-
-              "${user.home}/.pi/agent/AGENTS.md".L = {
-                argument = "${rulesFile}";
-              };
-            }) selectedUsers
-          );
-      })
-
 
       (lib.mkIf (cfg.models != null) {
         systemd.tmpfiles.settings."10-pi-coding-agent-models" = lib.mkMerge (
