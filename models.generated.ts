@@ -15225,23 +15225,6 @@ export const MODELS = {
 			contextWindow: 200000,
 			maxTokens: 8000,
 		} satisfies Model<"anthropic-messages">,
-		"prime-intellect/intellect-3": {
-			id: "prime-intellect/intellect-3",
-			name: "INTELLECT 3",
-			api: "anthropic-messages",
-			provider: "vercel-ai-gateway",
-			baseUrl: "https://ai-gateway.vercel.sh",
-			reasoning: true,
-			input: ["text"],
-			cost: {
-				input: 0.19999999999999998,
-				output: 1.1,
-				cacheRead: 0,
-				cacheWrite: 0,
-			},
-			contextWindow: 131072,
-			maxTokens: 131072,
-		} satisfies Model<"anthropic-messages">,
 		"xai/grok-3": {
 			id: "xai/grok-3",
 			name: "Grok 3 Beta",
